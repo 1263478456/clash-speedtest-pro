@@ -145,6 +145,31 @@ async def update_subscription_usage(sub_id: int):
         await session.commit()
 
 
+async def update_subscription(sub_id: int, user_id: int, name: str = None, url: str = None, node_count: int = None) -> bool:
+    """更新订阅信息"""
+    async with async_session() as session:
+        # 先查询订阅是否存在
+        result = await session.execute(
+            select(Subscription)
+            .where(Subscription.id == sub_id, Subscription.user_id == user_id)
+        )
+        sub = result.scalar_one_or_none()
+        if not sub:
+            return False
+        
+        # 更新字段
+        if name is not None:
+            sub.name = name
+        if url is not None:
+            sub.url = url
+        if node_count is not None:
+            sub.node_count = node_count
+        sub.updated_at = datetime.utcnow()
+        
+        await session.commit()
+        return True
+
+
 async def mark_running_as_stopped():
     """将所有运行中的任务标记为已停止（用于应用重启后清理）"""
     async with async_session() as session:

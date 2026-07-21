@@ -788,3 +788,67 @@ body {
 .btn-warning:hover:not(:disabled) {
     background: #f59e0b;
 }
+
+/* 上传区域 */
+.upload-area {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+#upload-status {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+#upload-preview {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg-input);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+#upload-info {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+}
+
+#upload-nodes-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.node-tag {
+    display: inline-block;
+    padding: 4px 8px;
+    background: var(--accent);
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+/* 编辑订阅弹窗 */
+.edit-sub-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+}
+
+.edit-sub-form input {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.edit-sub-form input:focus {
+    outline: none;
+    border-color: var(--accent);
+}

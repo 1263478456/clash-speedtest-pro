@@ -1,7 +1,8 @@
 """
 速度测试模块
-通过本地代理进行下载速度、延迟测试
+通过本地代理进行下载速度、上传速度、延迟测试
 """
+import os
 import time
 import asyncio
 import httpx
@@ -184,6 +185,99 @@ async def test_download_speed(
         return {"speed_bps": 0, "speed_mbps": 0, "total_bytes": 0, "traffic_mb": 0, "error": str(e)}
 
 
+# 上传测试目标 URL
+UPLOAD_TEST_URL = "https://speed.cloudflare.com/__up"
+
+
+async def test_upload_speed(
+    timeout: float = SPEED_TEST_TIMEOUT,
+    duration: float = 10.0,
+    data_size_mb: int = 10
+) -> Dict[str, Any]:
+    """
+    上传速度测试
+    返回: {"speed_bps": float, "speed_mbps": float, "speed_mb_per_sec": float, "total_bytes": int, "traffic_mb": float}
+    """
+    ports = get_current_ports()
+    proxy_url = f"http://127.0.0.1:{ports['proxy']}"
+    
+    # 生成随机数据进行上传
+    data_size = data_size_mb * 1024 * 1024  # 转换为字节
+    upload_data = os.urandom(min(data_size, 1024 * 1024))  # 1MB 数据块
+    
+    total_bytes = 0
+    start_time = time.monotonic()
+    
+    print(f"[SpeedTest] 开始上传测试: 目标 {UPLOAD_TEST_URL}")
+    print(f"[SpeedTest] 使用代理: {proxy_url}, 数据大小: {data_size_mb}MB")
+    
+    try:
+        async with httpx.AsyncClient(
+            verify=False,
+            timeout=timeout,
+            proxies=proxy_url,
+            follow_redirects=True,
+        ) as client:
+            print(f"[SpeedTest] 正在建立上传连接...")
+            
+            chunk_count = 0
+            while True:
+                elapsed = time.monotonic() - start_time
+                if elapsed >= duration:
+                    print(f"[SpeedTest] 达到时间限制 {duration}s, 停止上传")
+                    break
+                
+                try:
+                    # 上传数据块
+                    resp = await client.post(
+                        UPLOAD_TEST_URL,
+                        content=upload_data,
+                        headers={"Content-Type": "application/octet-stream"}
+                    )
+                    total_bytes += len(upload_data)
+                    chunk_count += 1
+                    
+                    if chunk_count % 10 == 0:
+                        print(f"[SpeedTest] 已上传 {chunk_count} 块, 共 {total_bytes / (1024*1024):.2f} MB")
+                    
+                    if resp.status_code not in (200, 201, 204):
+                        print(f"[SpeedTest] 上传响应状态码: {resp.status_code}")
+                        
+                except Exception as chunk_err:
+                    print(f"[SpeedTest] 上传块失败: {chunk_err}")
+                    break
+        
+        elapsed = time.monotonic() - start_time
+        if elapsed <= 0:
+            elapsed = 0.001
+        
+        speed_bps = total_bytes / elapsed  # Bytes per second
+        speed_mbps = speed_bps * 8 / 1_000_000  # Mbps
+        speed_mb_per_sec = total_bytes / elapsed / (1024 * 1024)  # MB/s
+        traffic_mb = total_bytes / (1024 * 1024)
+        
+        print(f"[SpeedTest] 上传完成: {total_bytes} 字节, 耗时: {elapsed:.2f}秒, 速度: {speed_mb_per_sec:.2f} MB/s, 流量: {traffic_mb:.2f} MB")
+        return {
+            "speed_bps": round(speed_bps),
+            "speed_mbps": round(speed_mbps, 2),
+            "speed_mb_per_sec": round(speed_mb_per_sec, 2),
+            "total_bytes": total_bytes,
+            "traffic_mb": round(traffic_mb, 2),
+            "elapsed": round(elapsed, 2),
+        }
+    except httpx.ConnectError as e:
+        print(f"[SpeedTest] 上传连接失败: {type(e).__name__}: {e}", flush=True)
+        return {"speed_bps": 0, "speed_mbps": 0, "speed_mb_per_sec": 0, "total_bytes": 0, "traffic_mb": 0, "error": f"连接失败: {str(e)}"}
+    except httpx.TimeoutException as e:
+        print(f"[SpeedTest] 上传超时: {type(e).__name__}: {e}", flush=True)
+        return {"speed_bps": 0, "speed_mbps": 0, "speed_mb_per_sec": 0, "total_bytes": 0, "traffic_mb": 0, "error": f"上传超时: {str(e)}"}
+    except Exception as e:
+        print(f"[SpeedTest] 上传失败: {type(e).__name__}: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        return {"speed_bps": 0, "speed_mbps": 0, "speed_mb_per_sec": 0, "total_bytes": 0, "traffic_mb": 0, "error": str(e)}
+
+
 async def test_latency() -> Dict[str, Any]:
     """
     综合延迟测试
@@ -270,7 +364,12 @@ async def test_node_speed(node_name: str, node_info: Dict[str, Any]) -> Dict[str
             break
 
     best_speed = max(speed_results, key=lambda x: x.get("speed_mb_per_sec", 0))
-    print(f"[SpeedTest] 节点 {node_name} 最佳速度: {best_speed.get('speed_mb_per_sec', 0)} MB/s", flush=True)
+    print(f"[SpeedTest] 节点 {node_name} 最佳下载速度: {best_speed.get('speed_mb_per_sec', 0)} MB/s", flush=True)
+
+    # 测试上传速度
+    print(f"[SpeedTest] 开始上传速度测试...", flush=True)
+    upload_result = await test_upload_speed(duration=8.0, data_size_mb=5)
+    print(f"[SpeedTest] 上传速度测试结果: speed_mb_per_sec={upload_result.get('speed_mb_per_sec', 0)} MB/s", flush=True)
 
     return {
         "name": node_name,
@@ -282,6 +381,10 @@ async def test_node_speed(node_name: str, node_info: Dict[str, Any]) -> Dict[str
         "speed_mb_per_sec": best_speed.get("speed_mb_per_sec", 0),
         "max_speed_mb_per_sec": max(r.get("speed_mb_per_sec", 0) for r in speed_results),
         "traffic_mb": best_speed.get("traffic_mb", 0),
+        "upload_speed_bps": upload_result.get("speed_bps", 0),
+        "upload_speed_mbps": upload_result.get("speed_mbps", 0),
+        "upload_speed_mb_per_sec": upload_result.get("speed_mb_per_sec", 0),
+        "upload_traffic_mb": upload_result.get("traffic_mb", 0),
         "tcp_ping": latency.get("tcp_ping"),
         "tls_rtt": latency.get("tls_rtt"),
         "https_ping": latency.get("https_ping"),

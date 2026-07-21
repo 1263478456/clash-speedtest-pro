@@ -78,6 +78,19 @@
                     <label>临时订阅链接</label>
                     <input type="text" id="temp-url" placeholder="粘贴 Clash 订阅链接...">
                 </div>
+                <div class="or-divider">或者</div>
+                <div class="form-group">
+                    <label>上传 YAML 配置</label>
+                    <div class="upload-area" id="upload-area">
+                        <input type="file" id="yaml-file" accept=".yaml,.yml" hidden>
+                        <button id="btn-upload-yaml" class="btn btn-secondary">📁 选择 YAML 文件</button>
+                        <span id="upload-status"></span>
+                    </div>
+                    <div id="upload-preview" class="hidden">
+                        <p id="upload-info"></p>
+                        <div id="upload-nodes-preview"></div>
+                    </div>
+                </div>
                 <div class="control-options">
                     <label class="checkbox-label">
                         <input type="checkbox" id="test-streaming" checked>
@@ -126,7 +139,8 @@
                                 <th>序号</th>
                                 <th>节点名称</th>
                                 <th>类型</th>
-                                <th>平均速度</th>
+                                <th>下载速度</th>
+                                <th>上传速度</th>
                                 <th>最高速度</th>
                                 <th>流量</th>
                                 <th>TLS RTT</th>
@@ -194,7 +208,8 @@
                                     <th>#</th>
                                     <th>节点名称</th>
                                     <th>类型</th>
-                                    <th>平均速度</th>
+                                    <th>下载速度</th>
+                                    <th>上传速度</th>
                                     <th>最高速度</th>
                                     <th>流量</th>
                                     <th>TLS RTT</th>

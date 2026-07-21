@@ -8,6 +8,7 @@ let currentUser = null;
 let pollTimer = null;
 let isRunning = false;
 let selectedResults = new Set();
+let uploadedYamlTempFile = null;
 
 // ========== DOM 元素 ==========
 const $ = (sel) => document.querySelector(sel);
@@ -196,6 +197,7 @@ function renderSubscriptions() {
                 ${sub.last_used_at ? `<p>上次使用: ${formatDate(sub.last_used_at)}</p>` : ''}
             </div>
             <div class="list-item-actions">
+                <button class="btn btn-small btn-secondary" onclick="editSubscription(${sub.id})" title="编辑订阅">✏️ 编辑</button>
                 <button class="btn btn-small btn-primary" onclick="refreshSubscription(${sub.id})" title="刷新订阅获取最新节点">🔄 刷新</button>
                 <button class="btn btn-small btn-danger" onclick="deleteSubscription(${sub.id})">🗑️ 删除</button>
             </div>
@@ -268,6 +270,33 @@ async function refreshSubscription(id) {
     }
 }
 
+async function editSubscription(id) {
+    const sub = subscriptions.find(s => s.id === id);
+    if (!sub) return;
+    
+    const newName = prompt('请输入新的订阅名称:', sub.name);
+    if (newName === null) return; // 用户取消
+    
+    const newUrl = prompt('请输入新的订阅链接:', sub.url);
+    if (newUrl === null) return; // 用户取消
+    
+    if (!newName.trim() || !newUrl.trim()) {
+        alert('名称和链接不能为空');
+        return;
+    }
+    
+    try {
+        await api(`/api/subscriptions/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name: newName.trim(), url: newUrl.trim() }),
+        });
+        alert('订阅更新成功');
+        loadSubscriptions();
+    } catch (e) {
+        alert('更新失败: ' + e.message);
+    }
+}
+
 // ========== 测速 ==========
 async function checkRunningTest() {
     try {
@@ -287,8 +316,33 @@ async function startTest() {
     const subscriptionId = $('#subscription-select').value;
     const tempUrl = $('#temp-url').value.trim();
     
+    // 检查是否使用上传的 YAML
+    if (uploadedYamlTempFile) {
+        try {
+            const data = await api('/api/start-test-yaml', {
+                method: 'POST',
+                body: JSON.stringify({
+                    temp_file: uploadedYamlTempFile,
+                    test_streaming: $('#test-streaming').checked,
+                    theme: $('#image-theme').value,
+                }),
+            });
+            isRunning = true;
+            $('#btn-start').classList.add('hidden');
+            $('#btn-stop').classList.remove('hidden');
+            $('#progress-section').classList.remove('hidden');
+            $('#results-section').classList.remove('hidden');
+            $('#results-body').innerHTML = '';
+            startPolling();
+            return;
+        } catch (e) {
+            alert('启动失败: ' + e.message);
+            return;
+        }
+    }
+    
     if (!subscriptionId && !tempUrl) {
-        alert('请选择订阅或输入链接');
+        alert('请选择订阅、输入链接或上传 YAML 文件');
         return;
     }
     
@@ -396,6 +450,7 @@ function renderLiveResults(results) {
             <td title="${escapeHtml(n.name)}">${escapeHtml(n.name)}</td>
             <td>${n.type || ''}</td>
             <td class="${getSpeedClass(n.speed_mb_per_sec)}">${formatSpeed(n.speed_mb_per_sec)}</td>
+            <td class="${getSpeedClass(n.upload_speed_mb_per_sec)}">${formatSpeed(n.upload_speed_mb_per_sec)}</td>
             <td class="${getSpeedClass(n.max_speed_mb_per_sec)}">${formatSpeed(n.max_speed_mb_per_sec)}</td>
             <td>${(n.traffic_mb || 0).toFixed(2)} MB</td>
             <td>${n.tls_rtt ? n.tls_rtt.toFixed(0) + 'ms' : '-'}</td>
@@ -594,6 +649,7 @@ async function viewHistoryDetail(resultId) {
                 <td title="${escapeHtml(n.name)}">${escapeHtml(n.name)}</td>
                 <td>${n.type || ''}</td>
                 <td class="${getSpeedClass(n.speed_mb_per_sec)}">${formatSpeed(n.speed_mb_per_sec)}</td>
+                <td class="${getSpeedClass(n.upload_speed_mb_per_sec)}">${formatSpeed(n.upload_speed_mb_per_sec)}</td>
                 <td class="${getSpeedClass(n.max_speed_mb_per_sec)}">${formatSpeed(n.max_speed_mb_per_sec)}</td>
                 <td>${(n.traffic_mb || 0).toFixed(2)} MB</td>
                 <td>${n.tls_rtt ? n.tls_rtt.toFixed(0) + 'ms' : '-'}</td>
@@ -939,6 +995,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnAddSub = $('#btn-add-sub');
     if (btnAddSub) {
         btnAddSub.addEventListener('click', addSubscription);
+    }
+    
+    // 上传 YAML
+    let uploadedYamlTempFile = null;
+    const btnUploadYaml = $('#btn-upload-yaml');
+    const yamlFileInput = $('#yaml-file');
+    if (btnUploadYaml && yamlFileInput) {
+        btnUploadYaml.addEventListener('click', () => yamlFileInput.click());
+        yamlFileInput.addEventListener('change', async function() {
+            if (!this.files[0]) return;
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                $('#upload-status').textContent = '⏳ 上传中...';
+                const data = await apiForm('/api/upload-yaml', formData);
+                uploadedYamlTempFile = data.temp_file;
+                $('#upload-status').textContent = `✅ ${data.message}`;
+                $('#upload-preview').classList.remove('hidden');
+                $('#upload-info').textContent = `已解析 ${data.node_count} 个节点`;
+                $('#upload-nodes-preview').innerHTML = data.nodes.map(n => 
+                    `<span class="node-tag">${escapeHtml(n.name)} (${n.type})</span>`
+                ).join(' ');
+            } catch (e) {
+                $('#upload-status').textContent = `❌ ${e.message}`;
+                uploadedYamlTempFile = null;
+            }
+        });
     }
     
     // 测速按钮

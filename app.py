@@ -10,11 +10,14 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 
-from fastapi import FastAPI, HTTPException, Request, Depends, status
+from fastapi import FastAPI, HTTPException, Request, Depends, status, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
+import yaml
+import tempfile
+import shutil
 
 from config import (
     WEB_HOST, WEB_PORT, MIHOMO_DIR, RESULTS_DIR,
@@ -403,6 +406,148 @@ async def stop_test(current_user=Depends(get_current_user)):
     
     await stop_mihomo()
     return {"success": True, "message": "测速已停止"}
+
+
+@app.post("/api/upload-yaml")
+async def upload_yaml(file: UploadFile = File(...), current_user=Depends(get_current_user)):
+    """上传 YAML 配置文件并解析节点"""
+    # 验证文件类型
+    if not file.filename.endswith(('.yaml', '.yml')):
+        raise HTTPException(status_code=400, detail="只支持 .yaml 或 .yml 文件")
+    
+    try:
+        # 读取文件内容
+        content = await file.read()
+        content_str = content.decode("utf-8")
+        
+        # 解析 YAML
+        config = yaml.safe_load(content_str)
+        if not config:
+            raise HTTPException(status_code=400, detail="YAML 文件为空或格式错误")
+        
+        # 提取代理节点
+        proxies = config.get("proxies", [])
+        if not proxies:
+            raise HTTPException(status_code=400, detail="YAML 中未找到 proxies 配置")
+        
+        # 过滤无效节点
+        nodes = []
+        invalid_patterns = ["官网", "剩余流量", "套餐时间", "到期", "续费", "余额"]
+        for p in proxies:
+            name = p.get("name", "unknown")
+            server = p.get("server", "")
+            
+            # 跳过信息节点
+            skip = False
+            for pattern in invalid_patterns:
+                if pattern in name:
+                    skip = True
+                    break
+            if skip or not server or server in ["example.com", "localhost"]:
+                continue
+            
+            nodes.append({
+                "name": name,
+                "type": p.get("type", "").upper(),
+                "server": server,
+                "port": p.get("port", 0),
+                "raw": p,
+            })
+        
+        if not nodes:
+            raise HTTPException(status_code=400, detail="未解析到有效节点")
+        
+        # 保存到临时文件
+        temp_dir = tempfile.mkdtemp()
+        temp_file = os.path.join(temp_dir, "uploaded_config.yaml")
+        with open(temp_file, "w", encoding="utf-8") as f:
+            f.write(content_str)
+        
+        return {
+            "success": True,
+            "message": f"成功解析 {len(nodes)} 个节点",
+            "node_count": len(nodes),
+            "nodes": nodes[:10],  # 只返回前10个预览
+            "temp_file": temp_file,
+        }
+    except yaml.YAMLError as e:
+        raise HTTPException(status_code=400, detail=f"YAML 格式错误: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"解析失败: {str(e)}")
+
+
+@app.post("/api/start-test-yaml")
+async def start_test_yaml(request: Request, current_user=Depends(get_current_user)):
+    """使用上传的 YAML 配置开始测速"""
+    if state.is_running:
+        raise HTTPException(status_code=400, detail="测速正在进行中")
+    
+    data = await request.json()
+    temp_file = data.get("temp_file")
+    test_streaming = data.get("test_streaming", True)
+    theme = data.get("theme", "dark")
+    
+    if not temp_file or not os.path.exists(temp_file):
+        raise HTTPException(status_code=400, detail="临时文件不存在，请重新上传 YAML")
+    
+    # 读取并解析 YAML
+    try:
+        with open(temp_file, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+        
+        proxies = config.get("proxies", [])
+        nodes = []
+        invalid_patterns = ["官网", "剩余流量", "套餐时间", "到期", "续费", "余额"]
+        for p in proxies:
+            name = p.get("name", "unknown")
+            server = p.get("server", "")
+            skip = False
+            for pattern in invalid_patterns:
+                if pattern in name:
+                    skip = True
+                    break
+            if skip or not server or server in ["example.com", "localhost"]:
+                continue
+            nodes.append({
+                "name": name,
+                "type": p.get("type", "").upper(),
+                "server": server,
+                "port": p.get("port", 0),
+                "raw": p,
+            })
+        
+        if not nodes:
+            raise HTTPException(status_code=400, detail="未解析到有效节点")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"解析 YAML 失败: {str(e)}")
+    
+    # 创建测速结果记录
+    test_result = await create_test_result(
+        user_id=current_user.id,
+        subscription_name="自定义 YAML",
+        total_nodes=len(nodes),
+        theme=theme
+    )
+    
+    # 启动后台测速
+    state.is_running = True
+    state.should_stop = False
+    state.current_user_id = current_user.id
+    state.current_result_id = test_result.id
+    state.theme = theme
+    state.nodes = nodes
+    state.results = []
+    state.progress = {
+        "total": len(nodes),
+        "completed": 0,
+        "current_node": "",
+        "status": "starting",
+        "message": "正在启动...",
+    }
+    
+    asyncio.create_task(run_speed_test(test_result.id, test_streaming))
+    
+    return {"success": True, "result_id": test_result.id, "message": "测速已开始"}
 
 
 @app.get("/api/results")
