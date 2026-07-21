@@ -601,6 +601,7 @@ async def get_result_detail(result_id: int, current_user=Depends(get_current_use
                 "server": n.server,
                 "port": n.port,
                 "speed_mb_per_sec": n.speed_mb_per_sec,
+                "upload_speed_mb_per_sec": n.upload_speed_mb_per_sec or 0,
                 "max_speed_mb_per_sec": n.max_speed_mb_per_sec,
                 "traffic_mb": n.traffic_mb,
                 "tcp_ping": n.tcp_ping,
@@ -630,6 +631,222 @@ async def remove_result(result_id: int, current_user=Depends(get_current_user)):
     if success:
         return {"success": True, "message": "结果已删除"}
     raise HTTPException(status_code=404, detail="结果不存在")
+
+
+@app.get("/api/results/{result_id}/export-html")
+async def export_result_html(result_id: int, current_user=Depends(get_current_user)):
+    """导出测速结果为 HTML"""
+    result = await get_test_result_by_id(result_id, current_user.id)
+    if not result:
+        raise HTTPException(status_code=404, detail="结果不存在")
+    
+    nodes = await get_node_results(result_id)
+    
+    # 构建节点数据
+    nodes_data = []
+    for n in nodes:
+        speed_class = "speed-fast" if n.speed_mb_per_sec >= 10 else "speed-medium" if n.speed_mb_per_sec >= 2 else "speed-slow" if n.speed_mb_per_sec >= 0.5 else "speed-very-slow"
+        nodes_data.append({
+            "name": n.node_name,
+            "type": n.node_type or "-",
+            "speed": f"{n.speed_mb_per_sec:.2f} MB/s",
+            "upload_speed": f"{n.upload_speed_mb_per_sec:.2f} MB/s" if n.upload_speed_mb_per_sec else "-",
+            "max_speed": f"{n.max_speed_mb_per_sec:.2f} MB/s",
+            "traffic": f"{n.traffic_mb:.2f} MB",
+            "tcp_ping": f"{n.tcp_ping:.0f}ms" if n.tcp_ping else "-",
+            "tls_rtt": f"{n.tls_rtt:.0f}ms" if n.tls_rtt else "-",
+            "https_ping": f"{n.https_ping:.0f}ms" if n.https_ping else "-",
+            "netflix": n.netflix or "-",
+            "youtube": n.youtube or "-",
+            "bilibili": n.bilibili or "-",
+            "disney_plus": n.disney_plus or "-",
+            "tiktok": n.tiktok or "-",
+            "chatgpt": n.chatgpt or "-",
+            "speed_class": speed_class,
+        })
+    
+    # 计算统计
+    speed_nodes = [n for n in nodes if n.speed_mb_per_sec > 0]
+    avg_speed = sum(n.speed_mb_per_sec for n in speed_nodes) / len(speed_nodes) if speed_nodes else 0
+    max_speed = max((n.max_speed_mb_per_sec for n in nodes), default=0)
+    
+    # 生成 HTML
+    html_content = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClashSpeedTest Pro - 测速结果</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f0f13; 
+            color: #e8e8f0; 
+            padding: 20px;
+        }}
+        .container {{ max-width: 1400px; margin: 0 auto; }}
+        .header {{ 
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a3a;
+        }}
+        .header h1 {{ 
+            font-size: 24px; 
+            margin-bottom: 16px;
+            background: linear-gradient(90deg, #4a9eff, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }}
+        .stats {{ 
+            display: flex; 
+            gap: 24px; 
+            flex-wrap: wrap;
+            font-size: 14px;
+        }}
+        .stat {{ 
+            background: rgba(255,255,255,0.05);
+            padding: 12px 16px;
+            border-radius: 8px;
+        }}
+        .stat-label {{ color: #a0a0b0; font-size: 12px; }}
+        .stat-value {{ font-size: 18px; font-weight: 600; color: #4a9eff; }}
+        table {{ 
+            width: 100%; 
+            border-collapse: collapse; 
+            background: #1a1a24;
+            border-radius: 12px;
+            overflow: hidden;
+        }}
+        th {{ 
+            background: #252535;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 13px;
+            color: #a0a0b0;
+            border-bottom: 1px solid #2a2a3a;
+        }}
+        td {{ 
+            padding: 10px 16px;
+            border-bottom: 1px solid #1e1e2a;
+            font-size: 13px;
+        }}
+        tr:hover {{ background: rgba(74, 158, 255, 0.05); }}
+        tr:nth-child(even) {{ background: rgba(255,255,255,0.02); }}
+        .speed-fast {{ color: #4caf50; font-weight: 600; }}
+        .speed-medium {{ color: #2196f3; }}
+        .speed-slow {{ color: #ff9800; }}
+        .speed-very-slow {{ color: #f44336; }}
+        .footer {{ 
+            text-align: center; 
+            padding: 20px;
+            color: #606070;
+            font-size: 12px;
+        }}
+        @media print {{
+            body {{ background: white; color: #333; }}
+            .header {{ background: #f5f5f5; }}
+            th {{ background: #eee; color: #333; }}
+            td {{ border-bottom-color: #ddd; }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ ClashSpeedTest Pro - 测速结果</h1>
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-label">订阅名称</div>
+                    <div class="stat-value">{result.subscription_name or '-'}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">测试时间</div>
+                    <div class="stat-value">{result.created_at.strftime('%Y-%m-%d %H:%M:%S') if result.created_at else '-'}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">总节点数</div>
+                    <div class="stat-value">{result.total_nodes}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">已测试</div>
+                    <div class="stat-value">{result.tested_nodes}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">有速度节点</div>
+                    <div class="stat-value">{len(speed_nodes)}</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">平均速度</div>
+                    <div class="stat-value">{avg_speed:.2f} MB/s</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">最高速度</div>
+                    <div class="stat-value">{max_speed:.2f} MB/s</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">总流量</div>
+                    <div class="stat-value">{result.total_traffic_mb:.2f} MB</div>
+                </div>
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>节点名称</th>
+                    <th>类型</th>
+                    <th>下载速度</th>
+                    <th>上传速度</th>
+                    <th>最高速度</th>
+                    <th>流量</th>
+                    <th>TLS RTT</th>
+                    <th>Netflix</th>
+                    <th>YouTube</th>
+                    <th>Bilibili</th>
+                    <th>Disney+</th>
+                    <th>TikTok</th>
+                    <th>ChatGPT</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+    
+    for i, node in enumerate(nodes_data):
+        html_content += f"""                <tr>
+                    <td>{i+1}</td>
+                    <td title="{node['name']}">{node['name']}</td>
+                    <td>{node['type']}</td>
+                    <td class="{node['speed_class']}">{node['speed']}</td>
+                    <td>{node['upload_speed']}</td>
+                    <td class="{node['speed_class']}">{node['max_speed']}</td>
+                    <td>{node['traffic']}</td>
+                    <td>{node['tls_rtt']}</td>
+                    <td>{node['netflix']}</td>
+                    <td>{node['youtube']}</td>
+                    <td>{node['bilibili']}</td>
+                    <td>{node['disney_plus']}</td>
+                    <td>{node['tiktok']}</td>
+                    <td>{node['chatgpt']}</td>
+                </tr>
+"""
+    
+    html_content += """            </tbody>
+        </table>
+        
+        <div class="footer">
+            <p>Generated by ClashSpeedTest Pro</p>
+        </div>
+    </div>
+</body>
+</html>"""
+    
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse(content=html_content, media_type="text/html")
+
 
 # ========== 定时任务 API ==========
 

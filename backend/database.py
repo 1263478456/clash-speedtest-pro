@@ -247,6 +247,7 @@ async def add_node_result(test_result_id: int, node_data: dict) -> NodeResult:
             server=node_data.get("server", ""),
             port=node_data.get("port", 0),
             speed_mb_per_sec=node_data.get("speed_mb_per_sec", 0),
+            upload_speed_mb_per_sec=node_data.get("upload_speed_mb_per_sec", 0),
             max_speed_mb_per_sec=node_data.get("max_speed_mb_per_sec", 0),
             traffic_mb=node_data.get("traffic_mb", 0),
             tcp_ping=node_data.get("tcp_ping"),

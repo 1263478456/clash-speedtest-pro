@@ -72,6 +72,7 @@ class NodeResult(Base):
     server = Column(String(200), nullable=True)
     port = Column(Integer, nullable=True)
     speed_mb_per_sec = Column(Float, default=0)
+    upload_speed_mb_per_sec = Column(Float, default=0)
     max_speed_mb_per_sec = Column(Float, default=0)
     traffic_mb = Column(Float, default=0)
     tcp_ping = Column(Float, nullable=True)

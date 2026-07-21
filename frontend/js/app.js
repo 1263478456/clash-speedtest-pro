@@ -525,7 +525,7 @@ function renderHistory(results) {
                 </div>
                 <div class="list-item-actions">
                     ${r.status === 'running' ? `<button class="btn btn-small btn-warning" onclick="stopRunningTest(${r.id})">⏹️ 停止</button>` : ''}
-                    ${r.image_path ? `<button class="btn btn-small btn-primary" onclick="viewImage('${r.image_path}')">📸 图片</button>` : ''}
+                    <button class="btn btn-small btn-primary" onclick="exportResultHtml(${r.id})">📄 导出HTML</button>
                     <button class="btn btn-small btn-secondary" onclick="viewHistoryDetail(${r.id})">📊 详情</button>
                     <button class="btn btn-small btn-danger" onclick="deleteResult(${r.id})">🗑️</button>
                 </div>
@@ -616,6 +616,24 @@ async function stopAllRunningTests() {
     }
 }
 
+async function exportHtmlReport() {
+    // 获取当前测速结果的 ID
+    try {
+        const statusData = await api('/api/status');
+        // 从历史记录中获取最新的结果
+        const historyData = await api('/api/results');
+        if (historyData.results && historyData.results.length > 0) {
+            const latestResult = historyData.results[0];
+            const url = `/api/results/${latestResult.id}/export-html`;
+            window.open(url, '_blank');
+        } else {
+            alert('没有可导出的结果');
+        }
+    } catch (e) {
+        alert('导出失败: ' + e.message);
+    }
+}
+
 // ========== 历史详情弹窗 ==========
 async function viewHistoryDetail(resultId) {
     try {
@@ -679,6 +697,11 @@ async function deleteResult(resultId) {
     } catch (e) {
         alert('删除失败: ' + e.message);
     }
+}
+
+function exportResultHtml(resultId) {
+    const url = `/api/results/${resultId}/export-html`;
+    window.open(url, '_blank');
 }
 
 function viewImage(imagePath) {
@@ -1079,6 +1102,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const closeImage = $('#close-image');
     if (closeImage) {
         closeImage.addEventListener('click', closeImageModal);
+    }
+    
+    // 导出 HTML 按钮
+    const btnExportHtml = $('#btn-export-html');
+    if (btnExportHtml) {
+        btnExportHtml.addEventListener('click', exportHtmlReport);
     }
     
     // 详情弹窗
