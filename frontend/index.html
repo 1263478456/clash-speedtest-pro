@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClashSpeedTest Pro</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="login-page" class="page">
+        <div class="login-container">
+            <div class="login-header">
+                <span class="logo-icon">⚡</span>
+                <h1>ClashSpeedTest Pro</h1>
+                <p>请登录以继续</p>
+            </div>
+            <form id="login-form" class="login-form">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="login-username" placeholder="请输入用户名" required>
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="login-password" placeholder="请输入密码" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">登录</button>
+                <p id="login-error" class="error-msg hidden"></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- 主页面 -->
+    <div id="main-page" class="page hidden">
+        <!-- 顶部导航 -->
+        <header class="header">
+            <div class="header-left">
+                <span class="logo-icon">⚡</span>
+                <h1>ClashSpeedTest Pro</h1>
+            </div>
+            <div class="header-right">
+                <button class="theme-toggle" id="theme-toggle">
+                    <span id="theme-icon">🌙</span>
+                </button>
+                <div class="user-menu">
+                    <button class="btn btn-ghost" id="user-btn">
+                        <span id="username-display">admin</span>
+                        <span>▼</span>
+                    </button>
+                    <div class="dropdown hidden" id="user-dropdown">
+                        <a href="#" id="settings-btn">⚙️ 设置</a>
+                        <a href="#" id="logout-btn">🚪 退出</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 标签页导航 -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="test">📊 测速</button>
+            <button class="tab" data-tab="subscriptions">📋 订阅</button>
+            <button class="tab" data-tab="history">📜 历史</button>
+            <button class="tab" data-tab="schedules">⏰ 定时</button>
+        </nav>
+
+        <!-- 测速页面 -->
+        <div id="tab-test" class="tab-content active">
+            <div class="card">
+                <h2>🚀 开始测速</h2>
+                <div class="form-group">
+                    <label>选择订阅</label>
+                    <select id="subscription-select">
+                        <option value="">-- 选择已保存的订阅 --</option>
+                    </select>
+                </div>
+                <div class="or-divider">或者</div>
+                <div class="form-group">
+                    <label>临时订阅链接</label>
+                    <input type="text" id="temp-url" placeholder="粘贴 Clash 订阅链接...">
+                </div>
+                <div class="control-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="test-streaming" checked>
+                        <span>检测流媒体解锁</span>
+                    </label>
+                    <div class="theme-selector">
+                        <span>图片主题:</span>
+                        <select id="image-theme">
+                            <option value="dark">深色</option>
+                            <option value="light">浅色</option>
+                        </select>
+                    </div>
+                    <div class="theme-selector">
+                        <span>日志等级:</span>
+                        <select id="log-level">
+                            <option value="warning">精简</option>
+                            <option value="info">标准</option>
+                            <option value="debug">详细</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="btn-start" class="btn btn-success btn-large">▶️ 开始测速</button>
+                <button id="btn-stop" class="btn btn-danger btn-large hidden">⏹️ 停止</button>
+            </div>
+
+            <!-- 进度 -->
+            <div class="card hidden" id="progress-section">
+                <h2>📊 测速进度</h2>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="progress-info">
+                    <span id="progress-text">准备中...</span>
+                    <span id="progress-count">0/0</span>
+                </div>
+                <div class="progress-current" id="progress-current"></div>
+            </div>
+
+            <!-- 实时结果 -->
+            <div class="card hidden" id="results-section">
+                <h2>📈 实时结果</h2>
+                <div class="results-table-wrapper">
+                    <table class="results-table" id="results-table">
+                        <thead>
+                            <tr>
+                                <th>序号</th>
+                                <th>节点名称</th>
+                                <th>类型</th>
+                                <th>平均速度</th>
+                                <th>最高速度</th>
+                                <th>流量</th>
+                                <th>TLS RTT</th>
+                                <th>HTTPS延迟</th>
+                                <th>Netflix</th>
+                                <th>YouTube</th>
+                                <th>Bilibili</th>
+                                <th>Disney+</th>
+                                <th>TikTok</th>
+                                <th>ChatGPT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="results-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 完成 -->
+            <div class="card hidden" id="complete-section">
+                <h2>✅ 测速完成</h2>
+                <p id="complete-summary"></p>
+                <div class="complete-actions">
+                    <button id="btn-download-image" class="btn btn-primary">📸 下载结果图片</button>
+                    <button id="btn-view-history" class="btn btn-secondary">📜 查看历史</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 订阅管理页面 -->
+        <div id="tab-subscriptions" class="tab-content">
+            <div class="card">
+                <h2>📋 订阅管理</h2>
+                <div class="form-row">
+                    <input type="text" id="sub-name" placeholder="订阅名称">
+                    <input type="text" id="sub-url" placeholder="订阅链接">
+                    <button id="btn-add-sub" class="btn btn-primary">➕ 添加</button>
+                </div>
+            </div>
+            <div class="card">
+                <div id="subscriptions-list" class="items-list"></div>
+            </div>
+        </div>
+
+        <!-- 历史记录页面 -->
+        <div id="tab-history" class="tab-content">
+            <div class="card">
+                <h2>📜 测速历史</h2>
+                <div id="history-list" class="items-list"></div>
+            </div>
+        </div>
+
+        <!-- 历史详情弹窗 -->
+        <div class="modal hidden" id="detail-modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h2 id="detail-modal-title">📊 测速详情</h2>
+                    <button class="modal-close" id="close-detail">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="detail-stats" id="detail-stats"></div>
+                    <div class="results-table-wrapper">
+                        <table class="results-table" id="detail-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>节点名称</th>
+                                    <th>类型</th>
+                                    <th>平均速度</th>
+                                    <th>最高速度</th>
+                                    <th>流量</th>
+                                    <th>TLS RTT</th>
+                                    <th>Netflix</th>
+                                    <th>YouTube</th>
+                                    <th>ChatGPT</th>
+                                </tr>
+                            </thead>
+                            <tbody id="detail-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 定时任务页面 -->
+        <div id="tab-schedules" class="tab-content">
+            <div class="card">
+                <h2>⏰ 定时任务</h2>
+                <button id="btn-add-schedule" class="btn btn-primary">➕ 新建任务</button>
+            </div>
+            <div class="card">
+                <div id="schedules-list" class="items-list"></div>
+            </div>
+        </div>
+
+        <!-- 设置弹窗 -->
+        <div class="modal hidden" id="settings-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ 设置</h2>
+                    <button class="modal-close" id="close-settings">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="settings-section">
+                        <h3>修改用户名</h3>
+                        <div class="form-group">
+                            <label>新用户名</label>
+                            <input type="text" id="new-username" placeholder="输入新用户名">
+                        </div>
+                        <button id="btn-change-username" class="btn btn-primary">保存</button>
+                    </div>
+                    <div class="settings-section">
+                        <h3>修改密码</h3>
+                        <div class="form-group">
+                            <label>旧密码</label>
+                            <input type="password" id="old-password" placeholder="输入旧密码">
+                        </div>
+                        <div class="form-group">
+                            <label>新密码</label>
+                            <input type="password" id="new-password" placeholder="输入新密码">
+                        </div>
+                        <button id="btn-change-password" class="btn btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 新建任务弹窗 -->
+        <div class="modal hidden" id="schedule-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⏰ 新建定时任务</h2>
+                    <button class="modal-close" id="close-schedule">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>任务名称</label>
+                        <input type="text" id="schedule-name" placeholder="例如：每日测速">
+                    </div>
+                    <div class="form-group">
+                        <label>选择订阅</label>
+                        <select id="schedule-subscription"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>执行频率</label>
+                        <select id="schedule-type">
+                            <option value="daily">每天</option>
+                            <option value="weekly">每周</option>
+                            <option value="monthly">每月</option>
+                        </select>
+                    </div>
+                    <div id="schedule-weekday-group" class="form-group hidden">
+                        <label>星期</label>
+                        <select id="schedule-weekday">
+                            <option value="0">周一</option>
+                            <option value="1">周二</option>
+                            <option value="2">周三</option>
+                            <option value="3">周四</option>
+                            <option value="4">周五</option>
+                            <option value="5">周六</option>
+                            <option value="6">周日</option>
+                        </select>
+                    </div>
+                    <div id="schedule-day-group" class="form-group hidden">
+                        <label>日期</label>
+                        <select id="schedule-day"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>时间</label>
+                        <div class="time-inputs">
+                            <select id="schedule-hour"></select>
+                            <span>:</span>
+                            <select id="schedule-minute"></select>
+                        </div>
+                    </div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="schedule-streaming" checked>
+                        <span>检测流媒体解锁</span>
+                    </label>
+                    <button id="btn-save-schedule" class="btn btn-primary btn-block">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 图片预览 -->
+        <div class="modal hidden" id="image-modal">
+            <div class="modal-content modal-image">
+                <button class="modal-close" id="close-image">&times;</button>
+                <img id="modal-image" src="" alt="测速结果">
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
