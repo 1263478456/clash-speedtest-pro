@@ -35,6 +35,12 @@ async def init_db():
                 print("[DB] 已添加 upload_speed_mb_per_sec 列")
             else:
                 print("[DB] upload_speed_mb_per_sec 列已存在")
+            
+            if 'max_upload_speed_mb_per_sec' not in columns:
+                await conn.execute(text("ALTER TABLE node_results ADD COLUMN max_upload_speed_mb_per_sec FLOAT DEFAULT 0"))
+                print("[DB] 已添加 max_upload_speed_mb_per_sec 列")
+            else:
+                print("[DB] max_upload_speed_mb_per_sec 列已存在")
         except Exception as e:
             print(f"[DB] 检查/添加列失败: {e}")
             import traceback
@@ -266,6 +272,7 @@ async def add_node_result(test_result_id: int, node_data: dict) -> NodeResult:
             speed_mb_per_sec=node_data.get("speed_mb_per_sec", 0),
             upload_speed_mb_per_sec=node_data.get("upload_speed_mb_per_sec", 0),
             max_speed_mb_per_sec=node_data.get("max_speed_mb_per_sec", 0),
+            max_upload_speed_mb_per_sec=node_data.get("max_upload_speed_mb_per_sec", 0),
             traffic_mb=node_data.get("traffic_mb", 0),
             tcp_ping=node_data.get("tcp_ping"),
             tls_rtt=node_data.get("tls_rtt"),
@@ -314,6 +321,7 @@ async def get_node_results(test_result_id: int) -> List[NodeResult]:
         result = await session.execute(
             select(NodeResult)
             .where(NodeResult.test_result_id == test_result_id)
+            .order_by(NodeResult.id.asc())
         )
         return list(result.scalars().all())
 
@@ -321,6 +329,12 @@ async def get_node_results(test_result_id: int) -> List[NodeResult]:
 async def delete_test_result(result_id: int, user_id: int) -> bool:
     """删除测速结果"""
     async with async_session() as session:
+        # 先删除关联的节点记录
+        await session.execute(
+            delete(NodeResult)
+            .where(NodeResult.test_result_id == result_id)
+        )
+        # 再删除主记录
         result = await session.execute(
             delete(TestResult)
             .where(TestResult.id == result_id, TestResult.user_id == user_id)

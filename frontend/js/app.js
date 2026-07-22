@@ -450,8 +450,9 @@ function renderLiveResults(results) {
             <td title="${escapeHtml(n.name)}">${escapeHtml(n.name)}</td>
             <td>${n.type || ''}</td>
             <td class="${getSpeedClass(n.speed_mb_per_sec)}">${formatSpeed(n.speed_mb_per_sec)}</td>
-            <td class="${getSpeedClass(n.upload_speed_mb_per_sec)}">${formatSpeed(n.upload_speed_mb_per_sec)}</td>
             <td class="${getSpeedClass(n.max_speed_mb_per_sec)}">${formatSpeed(n.max_speed_mb_per_sec)}</td>
+            <td class="${getSpeedClass(n.upload_speed_mb_per_sec)}">${formatSpeed(n.upload_speed_mb_per_sec)}</td>
+            <td class="${getSpeedClass(n.max_upload_speed_mb_per_sec)}">${formatSpeed(n.max_upload_speed_mb_per_sec)}</td>
             <td>${(n.traffic_mb || 0).toFixed(2)} MB</td>
             <td>${n.tls_rtt ? n.tls_rtt.toFixed(0) + 'ms' : '-'}</td>
             <td>${n.https_ping ? n.https_ping.toFixed(0) + 'ms' : '-'}</td>
@@ -667,8 +668,9 @@ async function viewHistoryDetail(resultId) {
                 <td title="${escapeHtml(n.name)}">${escapeHtml(n.name)}</td>
                 <td>${n.type || ''}</td>
                 <td class="${getSpeedClass(n.speed_mb_per_sec)}">${formatSpeed(n.speed_mb_per_sec)}</td>
-                <td class="${getSpeedClass(n.upload_speed_mb_per_sec)}">${formatSpeed(n.upload_speed_mb_per_sec)}</td>
                 <td class="${getSpeedClass(n.max_speed_mb_per_sec)}">${formatSpeed(n.max_speed_mb_per_sec)}</td>
+                <td class="${getSpeedClass(n.upload_speed_mb_per_sec)}">${formatSpeed(n.upload_speed_mb_per_sec)}</td>
+                <td class="${getSpeedClass(n.max_upload_speed_mb_per_sec)}">${formatSpeed(n.max_upload_speed_mb_per_sec)}</td>
                 <td>${(n.traffic_mb || 0).toFixed(2)} MB</td>
                 <td>${n.tls_rtt ? n.tls_rtt.toFixed(0) + 'ms' : '-'}</td>
                 <td class="${getStatusClass(n.streaming?.Netflix)}">${n.streaming?.Netflix || '-'}</td>

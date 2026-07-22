@@ -601,8 +601,9 @@ async def get_result_detail(result_id: int, current_user=Depends(get_current_use
                 "server": n.server,
                 "port": n.port,
                 "speed_mb_per_sec": n.speed_mb_per_sec,
-                "upload_speed_mb_per_sec": n.upload_speed_mb_per_sec or 0,
                 "max_speed_mb_per_sec": n.max_speed_mb_per_sec,
+                "upload_speed_mb_per_sec": n.upload_speed_mb_per_sec or 0,
+                "max_upload_speed_mb_per_sec": n.max_upload_speed_mb_per_sec or 0,
                 "traffic_mb": n.traffic_mb,
                 "tcp_ping": n.tcp_ping,
                 "tls_rtt": n.tls_rtt,
@@ -649,9 +650,10 @@ async def export_result_html(result_id: int, current_user=Depends(get_current_us
         nodes_data.append({
             "name": n.node_name,
             "type": n.node_type or "-",
-            "speed": f"{n.speed_mb_per_sec:.2f} MB/s",
-            "upload_speed": f"{n.upload_speed_mb_per_sec:.2f} MB/s" if n.upload_speed_mb_per_sec else "-",
+            "avg_speed": f"{n.speed_mb_per_sec:.2f} MB/s",
             "max_speed": f"{n.max_speed_mb_per_sec:.2f} MB/s",
+            "avg_upload": f"{n.upload_speed_mb_per_sec:.2f} MB/s" if n.upload_speed_mb_per_sec else "-",
+            "max_upload": f"{n.max_upload_speed_mb_per_sec:.2f} MB/s" if n.max_upload_speed_mb_per_sec else "-",
             "traffic": f"{n.traffic_mb:.2f} MB",
             "tcp_ping": f"{n.tcp_ping:.0f}ms" if n.tcp_ping else "-",
             "tls_rtt": f"{n.tls_rtt:.0f}ms" if n.tls_rtt else "-",
@@ -799,9 +801,10 @@ async def export_result_html(result_id: int, current_user=Depends(get_current_us
                     <th>#</th>
                     <th>节点名称</th>
                     <th>类型</th>
-                    <th>下载速度</th>
-                    <th>上传速度</th>
-                    <th>最高速度</th>
+                    <th>平均下载</th>
+                    <th>最高下载</th>
+                    <th>平均上传</th>
+                    <th>最高上传</th>
                     <th>流量</th>
                     <th>TLS RTT</th>
                     <th>Netflix</th>
@@ -820,9 +823,10 @@ async def export_result_html(result_id: int, current_user=Depends(get_current_us
                     <td>{i+1}</td>
                     <td title="{node['name']}">{node['name']}</td>
                     <td>{node['type']}</td>
-                    <td class="{node['speed_class']}">{node['speed']}</td>
-                    <td>{node['upload_speed']}</td>
+                    <td class="{node['speed_class']}">{node['avg_speed']}</td>
                     <td class="{node['speed_class']}">{node['max_speed']}</td>
+                    <td>{node['avg_upload']}</td>
+                    <td>{node['max_upload']}</td>
                     <td>{node['traffic']}</td>
                     <td>{node['tls_rtt']}</td>
                     <td>{node['netflix']}</td>

@@ -353,38 +353,60 @@ async def test_node_speed(node_name: str, node_info: Dict[str, Any]) -> Dict[str
     latency = await test_latency()
     print(f"[SpeedTest] 延迟测试完成: {latency}", flush=True)
 
-    # 测试下载速度 (多次取最大值)
-    speed_results = []
-    for i in range(2):
+    # 测试下载速度 (3次)
+    download_results = []
+    for i in range(3):
         print(f"[SpeedTest] 开始第 {i+1} 次下载速度测试...", flush=True)
         result = await test_download_speed()
         print(f"[SpeedTest] 第 {i+1} 次测试结果: speed_mb_per_sec={result.get('speed_mb_per_sec', 0)}, traffic_mb={result.get('traffic_mb', 0)}", flush=True)
-        speed_results.append(result)
-        if result.get("speed_mbps", 0) > 0:
-            break
+        download_results.append(result)
+    
+    # 过滤有效结果
+    valid_downloads = [r for r in download_results if r.get("speed_mb_per_sec", 0) > 0]
+    if valid_downloads:
+        avg_download = sum(r["speed_mb_per_sec"] for r in valid_downloads) / len(valid_downloads)
+        max_download = max(r["speed_mb_per_sec"] for r in valid_downloads)
+        download_traffic = sum(r.get("traffic_mb", 0) for r in download_results)
+    else:
+        avg_download = 0
+        max_download = 0
+        download_traffic = sum(r.get("traffic_mb", 0) for r in download_results)
+    
+    print(f"[SpeedTest] 节点 {node_name} 下载: 平均={avg_download:.2f} MB/s, 最高={max_download:.2f} MB/s, 流量={download_traffic:.2f} MB", flush=True)
 
-    best_speed = max(speed_results, key=lambda x: x.get("speed_mb_per_sec", 0))
-    print(f"[SpeedTest] 节点 {node_name} 最佳下载速度: {best_speed.get('speed_mb_per_sec', 0)} MB/s", flush=True)
+    # 测试上传速度 (3次)
+    upload_results = []
+    for i in range(3):
+        print(f"[SpeedTest] 开始第 {i+1} 次上传速度测试...", flush=True)
+        result = await test_upload_speed(duration=8.0, data_size_mb=5)
+        print(f"[SpeedTest] 第 {i+1} 次上传结果: speed_mb_per_sec={result.get('speed_mb_per_sec', 0)}, traffic_mb={result.get('traffic_mb', 0)}", flush=True)
+        upload_results.append(result)
+    
+    # 过滤有效结果
+    valid_uploads = [r for r in upload_results if r.get("speed_mb_per_sec", 0) > 0]
+    if valid_uploads:
+        avg_upload = sum(r["speed_mb_per_sec"] for r in valid_uploads) / len(valid_uploads)
+        max_upload = max(r["speed_mb_per_sec"] for r in valid_uploads)
+        upload_traffic = sum(r.get("traffic_mb", 0) for r in upload_results)
+    else:
+        avg_upload = 0
+        max_upload = 0
+        upload_traffic = sum(r.get("traffic_mb", 0) for r in upload_results)
+    
+    print(f"[SpeedTest] 节点 {node_name} 上传: 平均={avg_upload:.2f} MB/s, 最高={max_upload:.2f} MB/s, 流量={upload_traffic:.2f} MB", flush=True)
 
-    # 测试上传速度
-    print(f"[SpeedTest] 开始上传速度测试...", flush=True)
-    upload_result = await test_upload_speed(duration=8.0, data_size_mb=5)
-    print(f"[SpeedTest] 上传速度测试结果: speed_mb_per_sec={upload_result.get('speed_mb_per_sec', 0)} MB/s", flush=True)
+    total_traffic = download_traffic + upload_traffic
 
     return {
         "name": node_name,
         "type": node_info.get("type", ""),
         "server": node_info.get("server", ""),
         "port": node_info.get("port", 0),
-        "speed_bps": best_speed.get("speed_bps", 0),
-        "speed_mbps": best_speed.get("speed_mbps", 0),
-        "speed_mb_per_sec": best_speed.get("speed_mb_per_sec", 0),
-        "max_speed_mb_per_sec": max(r.get("speed_mb_per_sec", 0) for r in speed_results),
-        "traffic_mb": best_speed.get("traffic_mb", 0),
-        "upload_speed_bps": upload_result.get("speed_bps", 0),
-        "upload_speed_mbps": upload_result.get("speed_mbps", 0),
-        "upload_speed_mb_per_sec": upload_result.get("speed_mb_per_sec", 0),
-        "upload_traffic_mb": upload_result.get("traffic_mb", 0),
+        "speed_mb_per_sec": round(avg_download, 2),
+        "max_speed_mb_per_sec": round(max_download, 2),
+        "upload_speed_mb_per_sec": round(avg_upload, 2),
+        "max_upload_speed_mb_per_sec": round(max_upload, 2),
+        "traffic_mb": round(total_traffic, 2),
         "tcp_ping": latency.get("tcp_ping"),
         "tls_rtt": latency.get("tls_rtt"),
         "https_ping": latency.get("https_ping"),
