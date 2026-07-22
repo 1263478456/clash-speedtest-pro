@@ -25,15 +25,22 @@ async def init_db():
         
         # 检查并添加缺失的列（用于升级现有数据库）
         try:
-            # 检查 node_results 表是否有 upload_speed_mb_per_sec 列
+            # 获取 node_results 表的列信息
             result = await conn.execute(
-                "SELECT name FROM pragma_table_info('node_results') WHERE name='upload_speed_mb_per_sec'"
+                "PRAGMA table_info(node_results)"
             )
-            if not result.fetchone():
+            columns = [row[1] for row in result.fetchall()]
+            print(f"[DB] node_results 表列: {columns}")
+            
+            if 'upload_speed_mb_per_sec' not in columns:
                 await conn.execute("ALTER TABLE node_results ADD COLUMN upload_speed_mb_per_sec FLOAT DEFAULT 0")
                 print("[DB] 已添加 upload_speed_mb_per_sec 列")
+            else:
+                print("[DB] upload_speed_mb_per_sec 列已存在")
         except Exception as e:
             print(f"[DB] 检查/添加列失败: {e}")
+            import traceback
+            traceback.print_exc()
     
     # 检查是否有默认用户，如果没有则创建
     async with async_session() as session:
