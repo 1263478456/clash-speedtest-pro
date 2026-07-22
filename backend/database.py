@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, text
 from passlib.context import CryptContext
 
 from config import DATABASE_URL
@@ -26,14 +26,12 @@ async def init_db():
         # 检查并添加缺失的列（用于升级现有数据库）
         try:
             # 获取 node_results 表的列信息
-            result = await conn.execute(
-                "PRAGMA table_info(node_results)"
-            )
+            result = await conn.execute(text("PRAGMA table_info(node_results)"))
             columns = [row[1] for row in result.fetchall()]
             print(f"[DB] node_results 表列: {columns}")
             
             if 'upload_speed_mb_per_sec' not in columns:
-                await conn.execute("ALTER TABLE node_results ADD COLUMN upload_speed_mb_per_sec FLOAT DEFAULT 0")
+                await conn.execute(text("ALTER TABLE node_results ADD COLUMN upload_speed_mb_per_sec FLOAT DEFAULT 0"))
                 print("[DB] 已添加 upload_speed_mb_per_sec 列")
             else:
                 print("[DB] upload_speed_mb_per_sec 列已存在")
