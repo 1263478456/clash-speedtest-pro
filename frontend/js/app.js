@@ -918,6 +918,169 @@ function closeImageModal() {
     $('#image-modal').classList.add('hidden');
 }
 
+// ========== 导出 HTML 报告 ==========
+async function exportHtmlReport() {
+    try {
+        const data = await api('/api/live-results');
+        const results = data.results || [];
+        
+        if (results.length === 0) {
+            alert('没有可导出的测速结果');
+            return;
+        }
+        
+        const theme = getSavedTheme();
+        const isDark = theme === 'dark';
+        
+        // 生成 HTML
+        const html = generateHtmlReport(results, isDark);
+        
+        // 创建 Blob 并下载
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `speedtest-report-${new Date().toISOString().slice(0, 10)}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        alert('导出失败: ' + e.message);
+    }
+}
+
+function generateHtmlReport(results, isDark) {
+    const bgColor = isDark ? '#1e1e23' : '#f5f5f7';
+    const cardBg = isDark ? '#2d2d37' : '#ffffff';
+    const textColor = isDark ? '#dcdce1' : '#1e1e28';
+    const dimColor = isDark ? '#8c8c96' : '#646478';
+    const borderColor = isDark ? '#3c3c46' : '#e0e0e6';
+    const headerBg = isDark ? '#2d2d37' : '#e6e6eb';
+    
+    function speedColor(mb) {
+        if (mb >= 10) return '#4caf50';
+        if (mb >= 2) return '#00bcd4';
+        if (mb >= 0.5) return '#ffc107';
+        if (mb > 0) return '#ff9800';
+        return '#f44336';
+    }
+    
+    function statusColor(s) {
+        if (s && s.includes('解锁')) return '#4caf50';
+        if (s === '未解锁') return '#f44336';
+        return dimColor;
+    }
+    
+    function fmtSpeed(mb) {
+        if (!mb || mb <= 0) return '0.00 MB/s';
+        if (mb >= 1000) return (mb / 1000).toFixed(2) + ' GB/s';
+        return mb.toFixed(2) + ' MB/s';
+    }
+    
+    const rows = results.map((n, i) => `
+        <tr style="background:${i % 2 === 0 ? (isDark ? '#23232a' : '#fafafa') : cardBg}">
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${dimColor}">${i + 1}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${textColor};font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(n.name)}">${escapeHtml(n.name)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${dimColor}">${n.type || ''}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${speedColor(n.speed_mb_per_sec)};font-weight:600">${fmtSpeed(n.speed_mb_per_sec)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${speedColor(n.max_speed_mb_per_sec)}">${fmtSpeed(n.max_speed_mb_per_sec)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${speedColor(n.upload_speed_mb_per_sec)};font-weight:600">${fmtSpeed(n.upload_speed_mb_per_sec)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${speedColor(n.max_upload_speed_mb_per_sec)}">${fmtSpeed(n.max_upload_speed_mb_per_sec)}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${dimColor}">${(n.traffic_mb || 0).toFixed(2)} MB</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${dimColor}">${n.tls_rtt ? n.tls_rtt.toFixed(0) + 'ms' : '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${dimColor}">${n.https_ping ? n.https_ping.toFixed(0) + 'ms' : '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${statusColor(n.streaming?.Netflix)}">${n.streaming?.Netflix || '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${statusColor(n.streaming?.YouTube)}">${n.streaming?.YouTube || '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${statusColor(n.streaming?.Bilibili)}">${n.streaming?.Bilibili || '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${statusColor(n.streaming?.['Disney+'])}">${n.streaming?.['Disney+'] || '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${statusColor(n.streaming?.TikTok)}">${n.streaming?.TikTok || '-'}</td>
+            <td style="padding:10px 12px;border-bottom:1px solid ${borderColor};color:${statusColor(n.streaming?.ChatGPT)}">${n.streaming?.ChatGPT || '-'}</td>
+        </tr>
+    `).join('');
+    
+    return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClashSpeedTest Pro - 测速报告</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: ${bgColor}; color: ${textColor}; padding: 24px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { color: ${dimColor}; font-size: 14px; }
+        .summary { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+        .summary-card { flex: 1; min-width: 150px; background: ${cardBg}; border: 1px solid ${borderColor}; border-radius: 12px; padding: 16px; text-align: center; }
+        .summary-card .label { color: ${dimColor}; font-size: 12px; margin-bottom: 4px; }
+        .summary-card .value { font-size: 24px; font-weight: 700; }
+        .table-wrapper { overflow-x: auto; background: ${cardBg}; border: 1px solid ${borderColor}; border-radius: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { padding: 12px; text-align: left; font-weight: 600; color: ${textColor}; background: ${headerBg}; border-bottom: 2px solid ${borderColor}; white-space: nowrap; position: sticky; top: 0; }
+        .footer { text-align: center; margin-top: 24px; color: ${dimColor}; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⚡ ClashSpeedTest Pro 测速报告</h1>
+            <p>生成时间: ${new Date().toLocaleString('zh-CN')} | 共 ${results.length} 个节点</p>
+        </div>
+        <div class="summary">
+            <div class="summary-card">
+                <div class="label">节点总数</div>
+                <div class="value">${results.length}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">最快下载</div>
+                <div class="value" style="color:#4caf50">${fmtSpeed(Math.max(...results.map(r => r.speed_mb_per_sec || 0)))}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">最快上传</div>
+                <div class="value" style="color:#00bcd4">${fmtSpeed(Math.max(...results.map(r => r.upload_speed_mb_per_sec || 0)))}</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">最低延迟</div>
+                <div class="value" style="color:#ffc107">${results.filter(r => r.tls_rtt).length > 0 ? Math.min(...results.filter(r => r.tls_rtt).map(r => r.tls_rtt)).toFixed(0) + 'ms' : '-'}</div>
+            </div>
+        </div>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>序号</th>
+                        <th>节点名称</th>
+                        <th>类型</th>
+                        <th>平均下载</th>
+                        <th>最高下载</th>
+                        <th>平均上传</th>
+                        <th>最高上传</th>
+                        <th>流量</th>
+                        <th>TLS RTT</th>
+                        <th>HTTPS延迟</th>
+                        <th>Netflix</th>
+                        <th>YouTube</th>
+                        <th>Bilibili</th>
+                        <th>Disney+</th>
+                        <th>TikTok</th>
+                        <th>ChatGPT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows}
+                </tbody>
+            </table>
+        </div>
+        <div class="footer">
+            <p>⚠️ 重要提示（AI 生成声明）：本报告由 ClashSpeedTest Pro 自动生成，测速结果仅供参考。</p>
+        </div>
+    </div>
+</body>
+</html>`;
+}
+
 // ========== 初始化 ==========
 function initTimeSelects() {
     const hourSelect = $('#schedule-hour');

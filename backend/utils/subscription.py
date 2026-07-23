@@ -202,6 +202,193 @@ def parse_v2ray_links(content: str) -> List[Dict[str, Any]]:
             except Exception:
                 continue
 
+        # vless:// 链接
+        elif line.startswith("vless://"):
+            try:
+                # VLESS 格式: vless://uuid@server:port?params#name
+                content_part = line[8:]  # 去掉 "vless://"
+                # 分离名称
+                if "#" in content_part:
+                    name_part, fragment = content_part.rsplit("#", 1)
+                    name = fragment
+                else:
+                    name_part = content_part
+                    name = f"VLESS-{line.split('@')[1].split(':')[0] if '@' in line else 'unknown'}"
+
+                # 分离 uuid 和 server:port
+                if "@" in name_part:
+                    uuid, server_port = name_part.split("@", 1)
+                else:
+                    continue
+
+                # 分离 server 和 port
+                if "?" in server_port:
+                    server_port_part, query_string = server_port.split("?", 1)
+                else:
+                    server_port_part = server_port
+                    query_string = ""
+
+                if ":" in server_port_part:
+                    server, port_str = server_port_part.rsplit(":", 1)
+                    port = int(port_str)
+                else:
+                    continue
+
+                # 解析查询参数
+                params = {}
+                if query_string:
+                    for param in query_string.split("&"):
+                        if "=" in param:
+                            k, v = param.split("=", 1)
+                            params[k] = v
+
+                # 构建 raw 配置
+                raw = {
+                    "name": name,
+                    "type": "vless",
+                    "server": server,
+                    "port": port,
+                    "uuid": uuid,
+                    "network": params.get("type", "tcp"),
+                    "udp": True,
+                }
+
+                # TLS 配置
+                security = params.get("security", "none")
+                if security in ["tls", "reality"]:
+                    raw["tls"] = True
+                    if params.get("sni"):
+                        raw["sni"] = params["sni"]
+                    if params.get("fp"):
+                        raw["client-fingerprint"] = params["fp"]
+                    if params.get("allowInsecure") == "1":
+                        raw["skip-cert-verify"] = True
+
+                # Reality 配置
+                if security == "reality":
+                    reality_opts = {}
+                    if params.get("pbk"):
+                        reality_opts["public-key"] = params["pbk"]
+                    if params.get("sid"):
+                        reality_opts["short-id"] = params["sid"]
+                    if reality_opts:
+                        raw["reality-opts"] = reality_opts
+                    # Reality 节点必须设置
+                    if not raw.get("client-fingerprint"):
+                        raw["client-fingerprint"] = "chrome"
+                    raw["skip-cert-verify"] = True
+                    if not raw.get("sni"):
+                        raw["sni"] = params.get("host", server)
+
+                # Flow 控制
+                if params.get("flow"):
+                    raw["flow"] = params["flow"]
+
+                # 传输层配置
+                network = params.get("type", "tcp")
+                if network == "ws":
+                    ws_opts = {}
+                    if params.get("path"):
+                        ws_opts["path"] = params["path"]
+                    if params.get("host"):
+                        ws_opts["headers"] = {"Host": params["host"]}
+                    if ws_opts:
+                        raw["ws-opts"] = ws_opts
+                elif network == "grpc":
+                    grpc_opts = {}
+                    if params.get("serviceName"):
+                        grpc_opts["grpc-service-name"] = params["serviceName"]
+                    if grpc_opts:
+                        raw["grpc-opts"] = grpc_opts
+                elif network == "h2":
+                    h2_opts = {}
+                    if params.get("path"):
+                        h2_opts["path"] = params["path"]
+                    if params.get("host"):
+                        h2_opts["host"] = [params["host"]]
+                    if h2_opts:
+                        raw["h2-opts"] = h2_opts
+
+                # Packet encoding
+                if params.get("pkt"):
+                    raw["packet-encoding"] = params["pkt"]
+
+                node = {
+                    "name": name,
+                    "type": "VLESS",
+                    "server": server,
+                    "port": port,
+                    "raw": raw,
+                }
+                nodes.append(node)
+            except Exception as e:
+                print(f"[Subscription] VLESS 解析失败: {e}", flush=True)
+                continue
+
+        # trojan:// 链接
+        elif line.startswith("trojan://"):
+            try:
+                # Trojan 格式: trojan://password@server:port?params#name
+                content_part = line[9:]  # 去掉 "trojan://"
+                # 分离名称
+                if "#" in content_part:
+                    name_part, fragment = content_part.rsplit("#", 1)
+                    name = fragment
+                else:
+                    name_part = content_part
+                    name = f"Trojan-{line.split('@')[1].split(':')[0] if '@' in line else 'unknown'}"
+
+                # 分离 password 和 server:port
+                if "@" in name_part:
+                    password, server_port = name_part.split("@", 1)
+                else:
+                    continue
+
+                # 分离 server 和 port
+                if "?" in server_port:
+                    server_port_part, query_string = server_port.split("?", 1)
+                else:
+                    server_port_part = server_port
+                    query_string = ""
+
+                if ":" in server_port_part:
+                    server, port_str = server_port_part.rsplit(":", 1)
+                    port = int(port_str)
+                else:
+                    continue
+
+                # 解析查询参数
+                params = {}
+                if query_string:
+                    for param in query_string.split("&"):
+                        if "=" in param:
+                            k, v = param.split("=", 1)
+                            params[k] = v
+
+                raw = {
+                    "name": name,
+                    "type": "trojan",
+                    "server": server,
+                    "port": port,
+                    "password": password,
+                }
+                if params.get("sni"):
+                    raw["sni"] = params["sni"]
+                if params.get("allowInsecure") == "1":
+                    raw["skip-cert-verify"] = True
+
+                node = {
+                    "name": name,
+                    "type": "TROJAN",
+                    "server": server,
+                    "port": port,
+                    "raw": raw,
+                }
+                nodes.append(node)
+            except Exception as e:
+                print(f"[Subscription] Trojan 解析失败: {e}", flush=True)
+                continue
+
         # ssr:// 链接 (ShadowsocksR)
         elif line.startswith("ssr://"):
             try:

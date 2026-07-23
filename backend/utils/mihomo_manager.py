@@ -147,6 +147,9 @@ def generate_mihomo_config(nodes: List[Dict[str, Any]], current_node: str = None
             proxies.append(proxy)
 
         elif proxy_type == "vless":
+            # 检测是否为 Reality 节点
+            is_reality = bool(raw.get("reality-opts"))
+            
             proxy = {
                 "name": node_name,
                 "type": "vless",
@@ -154,8 +157,62 @@ def generate_mihomo_config(nodes: List[Dict[str, Any]], current_node: str = None
                 "port": node["port"],
                 "uuid": raw.get("uuid", ""),
                 "network": raw.get("network", "tcp"),
-                "tls": raw.get("tls", False),
+                "udp": raw.get("udp", True),
             }
+            # Flow 控制 (XTLS Vision) — VLESS 常用值: xtls-rprx-vision
+            if raw.get("flow"):
+                proxy["flow"] = raw["flow"]
+            # Encryption — VLESS 加密方式，Reality 通常为空
+            if raw.get("encryption") is not None:
+                proxy["encryption"] = raw["encryption"]
+            # Packet encoding — UDP 包编码 (xudp / packetaddr)
+            if raw.get("packet-encoding"):
+                proxy["packet-encoding"] = raw["packet-encoding"]
+            elif raw.get("xudp"):
+                proxy["packet-encoding"] = "xudp"
+            # TLS 配置
+            if raw.get("tls"):
+                proxy["tls"] = True
+                # servername (SNI) — 优先级: sni > servername
+                if raw.get("sni"):
+                    proxy["servername"] = raw["sni"]
+                elif raw.get("servername"):
+                    proxy["servername"] = raw["servername"]
+                # skip-cert-verify — Reality 节点必须跳过证书验证
+                if raw.get("skip-cert-verify") or is_reality:
+                    proxy["skip-cert-verify"] = True
+                # fingerprint — TLS 指纹（区别于 client-fingerprint）
+                if raw.get("fingerprint"):
+                    proxy["fingerprint"] = raw["fingerprint"]
+                # client-fingerprint — Reality 节点不能为空，默认 chrome
+                if raw.get("client-fingerprint"):
+                    proxy["client-fingerprint"] = raw["client-fingerprint"]
+                elif is_reality:
+                    proxy["client-fingerprint"] = "chrome"
+                # ALPN — TLS 协商协议列表
+                if raw.get("alpn"):
+                    proxy["alpn"] = raw["alpn"]
+                # Reality 选项 — 包含 public-key 和 short-id
+                if raw.get("reality-opts"):
+                    proxy["reality-opts"] = raw["reality-opts"]
+                # Shadow-TLS 选项
+                if raw.get("shadow-tls-opts"):
+                    proxy["shadow-tls-opts"] = raw["shadow-tls-opts"]
+            # 传输层选项
+            network = raw.get("network", "tcp")
+            if network == "ws" and raw.get("ws-opts"):
+                proxy["ws-opts"] = raw["ws-opts"]
+            elif network == "h2" and raw.get("h2-opts"):
+                proxy["h2-opts"] = raw["h2-opts"]
+            elif network == "grpc" and raw.get("grpc-opts"):
+                proxy["grpc-opts"] = raw["grpc-opts"]
+            elif network == "xhttp" and raw.get("xhttp-opts"):
+                proxy["xhttp-opts"] = raw["xhttp-opts"]
+            elif network == "http" and raw.get("http-opts"):
+                proxy["http-opts"] = raw["http-opts"]
+            # SMUX 多路复用
+            if raw.get("smux"):
+                proxy["smux"] = raw["smux"]
             proxies.append(proxy)
 
         elif proxy_type == "ssr":
