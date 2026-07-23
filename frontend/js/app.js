@@ -921,33 +921,120 @@ function closeImageModal() {
 // ========== 导出 HTML 报告 ==========
 async function exportHtmlReport() {
     try {
-        const data = await api('/api/live-results');
+        // 直接调用 API，不依赖 token（/api/live-results 不需要认证）
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        
+        const res = await fetch('/api/live-results', { headers });
+        if (!res.ok) {
+            // 如果 API 调用失败，尝试使用当前页面中的结果
+            const tableRows = document.querySelectorAll('#results-body tr');
+            if (tableRows.length === 0) {
+                alert('没有可导出的测速结果');
+                return;
+            }
+            // 从表格中提取数据
+            const results = extractResultsFromTable();
+            if (results.length === 0) {
+                alert('没有可导出的测速结果');
+                return;
+            }
+            const theme = getSavedTheme();
+            const isDark = theme === 'dark';
+            const html = generateHtmlReport(results, isDark);
+            downloadHtmlReport(html);
+            return;
+        }
+        
+        const data = await res.json();
         const results = data.results || [];
         
         if (results.length === 0) {
-            alert('没有可导出的测速结果');
+            // 尝试从表格中提取
+            const tableResults = extractResultsFromTable();
+            if (tableResults.length === 0) {
+                alert('没有可导出的测速结果');
+                return;
+            }
+            const theme = getSavedTheme();
+            const isDark = theme === 'dark';
+            const html = generateHtmlReport(tableResults, isDark);
+            downloadHtmlReport(html);
             return;
         }
         
         const theme = getSavedTheme();
         const isDark = theme === 'dark';
-        
-        // 生成 HTML
         const html = generateHtmlReport(results, isDark);
-        
-        // 创建 Blob 并下载
-        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `speedtest-report-${new Date().toISOString().slice(0, 10)}.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadHtmlReport(html);
     } catch (e) {
-        alert('导出失败: ' + e.message);
+        // 出错时尝试从表格中提取
+        const tableResults = extractResultsFromTable();
+        if (tableResults.length === 0) {
+            alert('导出失败: ' + e.message);
+            return;
+        }
+        const theme = getSavedTheme();
+        const isDark = theme === 'dark';
+        const html = generateHtmlReport(tableResults, isDark);
+        downloadHtmlReport(html);
     }
+}
+
+function extractResultsFromTable() {
+    const results = [];
+    const rows = document.querySelectorAll('#results-body tr');
+    rows.forEach((row, i) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 10) {
+            results.push({
+                name: cells[1]?.textContent || '',
+                type: cells[2]?.textContent || '',
+                speed_mb_per_sec: parseSpeedFromText(cells[3]?.textContent || '0'),
+                max_speed_mb_per_sec: parseSpeedFromText(cells[4]?.textContent || '0'),
+                upload_speed_mb_per_sec: parseSpeedFromText(cells[5]?.textContent || '0'),
+                max_upload_speed_mb_per_sec: parseSpeedFromText(cells[6]?.textContent || '0'),
+                traffic_mb: parseFloat(cells[7]?.textContent) || 0,
+                tls_rtt: parseFloat(cells[8]?.textContent) || null,
+                https_ping: parseFloat(cells[9]?.textContent) || null,
+                streaming: {
+                    Netflix: cells[10]?.textContent || '-',
+                    YouTube: cells[11]?.textContent || '-',
+                    Bilibili: cells[12]?.textContent || '-',
+                    'Disney+': cells[13]?.textContent || '-',
+                    TikTok: cells[14]?.textContent || '-',
+                    ChatGPT: cells[15]?.textContent || '-',
+                }
+            });
+        }
+    });
+    return results;
+}
+
+function parseSpeedFromText(text) {
+    if (!text) return 0;
+    const match = text.match(/([\d.]+)\s*(GB\/s|MB\/s|KB\/s)/);
+    if (!match) return 0;
+    const value = parseFloat(match[1]);
+    const unit = match[2];
+    if (unit === 'GB/s') return value * 1000;
+    if (unit === 'MB/s') return value;
+    if (unit === 'KB/s') return value / 1000;
+    return 0;
+}
+
+function downloadHtmlReport(html) {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `speedtest-report-${new Date().toISOString().slice(0, 10)}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 function generateHtmlReport(results, isDark) {
